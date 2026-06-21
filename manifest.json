@@ -1,0 +1,9 @@
+{
+  "name": "雑草記録アプリ",
+  "short_name": "雑草記録",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#2e7d32",
+  "icons": []
+}

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>雑草記録アプリ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: auto;
+      padding: 16px;
+      background: #f5f5f5;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: bold;
+    }
+
+    input, textarea, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    button {
+      margin-top: 20px;
+      background: #2e7d32;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .record {
+      background: white;
+      padding: 12px;
+      margin-top: 16px;
+      border-radius: 8px;
+    }
+
+    #map {
+  width: 100%;
+  height: 60vh;
+  margin-top: 20px;
+  border: solid 1px #ccc;
+  border-radius: 10px;
+    }
+  </style>
+  <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2e7d32">
+</head>
+
+<body>
+  <h1>雑草記録アプリ</h1>
+
+  <label>圃場番地</label>
+  <input type="text" id="address" placeholder="例：本庄町1100">
+
+  <label>草の種類</label>
+  <input type="text" id="weedName" placeholder="例：ネズミムギ、スギナ、不明">
+
+  <label>メモ</label>
+  <textarea id="memo" rows="4" placeholder="例：北側の畦畔"></textarea>
+
+  <button id="getLocationBtn">現在地を取得</button>
+  <p id="locationText">位置情報：未取得</p>
+
+  <button id="saveBtn">保存する</button>
+
+  <h2>記録一覧</h2>
+  <div id="records"></div>
+
+  <h2>圃場地図</h2>
+  <div id="map"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs,
+      serverTimestamp,
+      query,
+      orderBy
+    } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB4L_kj9PWPzQnU82DVvl2H7aYGwzHfyGY",
+      authDomain: "weed-control-f1798.firebaseapp.com",
+      projectId: "weed-control-f1798",
+      storageBucket: "weed-control-f1798.firebasestorage.app",
+      messagingSenderId: "748779253891",
+      appId: "1:748779253891:web:82ab5436f28ef1b9d76bb6",
+      measurementId: "G-L9X51WTJS2"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const addressInput = document.getElementById("address");
+    const weedNameInput = document.getElementById("weedName");
+    const memoInput = document.getElementById("memo");
+    const saveBtn = document.getElementById("saveBtn");
+    const recordsDiv = document.getElementById("records");
+    const getLocationBtn = document.getElementById("getLocationBtn");
+    const locationText = document.getElementById("locationText");
+
+    let currentLat = null;
+    let currentLng = null;
+    let selectedMarker = null;
+    let currentLocationMarker = null;
+
+    const savedMarkersLayer = L.layerGroup();
+
+    const map = L.map("map").setView([35.324, 136.138], 13);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    savedMarkersLayer.addTo(map);
+
+    map.on("click", (e) => {
+      currentLat = e.latlng.lat;
+      currentLng = e.latlng.lng;
+
+      locationText.textContent =
+        `選択位置：${currentLat.toFixed(6)}, ${currentLng.toFixed(6)}`;
+
+      if (selectedMarker) {
+        map.removeLayer(selectedMarker);
+      }
+
+      selectedMarker = L.marker([currentLat, currentLng])
+        .addTo(map)
+        .bindPopup("選択した場所")
+        .openPopup();
+    });
+
+    getLocationBtn.addEventListener("click", () => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          currentLat = position.coords.latitude;
+          currentLng = position.coords.longitude;
+
+          locationText.textContent =
+            `位置情報：${currentLat.toFixed(6)}, ${currentLng.toFixed(6)}`;
+
+          map.setView([currentLat, currentLng], 17);
+
+          if (currentLocationMarker) {
+            map.removeLayer(currentLocationMarker);
+          }
+
+          currentLocationMarker = L.marker([currentLat, currentLng])
+            .addTo(map)
+            .bindPopup("現在地")
+            .openPopup();
+        },
+        () => {
+          alert("位置情報を取得できませんでした");
+        }
+      );
+    });
+
+    saveBtn.addEventListener("click", async () => {
+      const address = addressInput.value;
+      const weedName = weedNameInput.value;
+      const memo = memoInput.value;
+
+      if (!address || !weedName) {
+        alert("番地・草の種類を入力してください");
+        return;
+      }
+
+      if (currentLat === null || currentLng === null) {
+        alert("地図をクリックするか、現在地を取得してください");
+        return;
+      }
+
+      saveBtn.textContent = "保存中...";
+      saveBtn.disabled = true;
+
+      await addDoc(collection(db, "weedRecords"), {
+        address: address,
+        weedName: weedName,
+        memo: memo,
+        latitude: currentLat,
+        longitude: currentLng,
+        photoUrl: "",
+        createdAt: serverTimestamp()
+      });
+
+      alert("保存しました");
+
+      addressInput.value = "";
+      weedNameInput.value = "";
+      memoInput.value = "";
+      locationText.textContent = "位置情報：未取得";
+      currentLat = null;
+      currentLng = null;
+
+      if (selectedMarker) {
+        map.removeLayer(selectedMarker);
+        selectedMarker = null;
+      }
+
+      saveBtn.textContent = "保存する";
+      saveBtn.disabled = false;
+
+      loadRecords();
+    });
+
+    async function loadRecords() {
+      recordsDiv.innerHTML = "";
+      savedMarkersLayer.clearLayers();
+
+      const q = query(
+        collection(db, "weedRecords"),
+        orderBy("createdAt", "desc")
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+
+        const div = document.createElement("div");
+        div.className = "record";
+
+        div.innerHTML = `
+          <p><strong>番地：</strong>${data.address}</p>
+          <p><strong>草の種類：</strong>${data.weedName}</p>
+          <p><strong>メモ：</strong>${data.memo || ""}</p>
+          <p><strong>緯度：</strong>${data.latitude || "未取得"}</p>
+          <p><strong>経度：</strong>${data.longitude || "未取得"}</p>
+        `;
+
+        recordsDiv.appendChild(div);
+
+        if (data.latitude && data.longitude) {
+          L.marker([data.latitude, data.longitude])
+            .addTo(savedMarkersLayer)
+            .bindPopup(`
+              <strong>${data.weedName}</strong><br>
+              番地：${data.address}<br>
+              メモ：${data.memo || ""}
+            `);
+        }
+      });
+    }
+
+loadRecords();
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker
+    .register("./service-worker.js")
+    .then(() => {
+      console.log("Service Worker 登録成功");
+    })
+    .catch((error) => {
+      console.log("Service Worker 登録失敗", error);
+    });
+}
+  </script>
+</body>
+</html>
