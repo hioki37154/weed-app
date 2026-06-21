@@ -85,7 +85,7 @@
 
   <button id="saveBtn">保存する</button>
 
-  <h2>圃場地図</h2>
+  <h2>地図</h2>
   <div id="map"></div>
 
   <h2>記録一覧</h2>
@@ -249,14 +249,17 @@
         const div = document.createElement("div");
         div.className = "record";
 
-        div.innerHTML = `
-          <p><strong>番地：</strong>${data.address}</p>
-          <p><strong>草の種類：</strong>${data.weedName}</p>
-          <p><strong>メモ：</strong>${data.memo || ""}</p>
-          <p><strong>緯度：</strong>${data.latitude || "未取得"}</p>
-          <p><strong>経度：</strong>${data.longitude || "未取得"}</p>
-          <button class="deleteBtn">削除する</button>
-        `;
+const createdDate = data.createdAt
+  ? data.createdAt.toDate().toLocaleDateString("ja-JP")
+  : "日付未設定";
+
+div.innerHTML = `
+  <p><strong>記録日：</strong>${createdDate}</p>
+  <p><strong>番地：</strong>${data.address}</p>
+  <p><strong>草の種類：</strong>${data.weedName}</p>
+  <p><strong>メモ：</strong>${data.memo || ""}</p>
+  <button class="deleteBtn">削除する</button>
+`;
 
         const deleteBtn = div.querySelector(".deleteBtn");
 
