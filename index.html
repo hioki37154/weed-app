@@ -88,15 +88,17 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-    import {
-      getFirestore,
-      collection,
-      addDoc,
-      getDocs,
-      serverTimestamp,
-      query,
-      orderBy
-    } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+  query,
+  orderBy
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyB4L_kj9PWPzQnU82DVvl2H7aYGwzHfyGY",
@@ -242,13 +244,30 @@
         const div = document.createElement("div");
         div.className = "record";
 
-        div.innerHTML = `
-          <p><strong>番地：</strong>${data.address}</p>
-          <p><strong>草の種類：</strong>${data.weedName}</p>
-          <p><strong>メモ：</strong>${data.memo || ""}</p>
-          <p><strong>緯度：</strong>${data.latitude || "未取得"}</p>
-          <p><strong>経度：</strong>${data.longitude || "未取得"}</p>
-        `;
+div.innerHTML = `
+  <p><strong>番地：</strong>${data.address}</p>
+  <p><strong>草の種類：</strong>${data.weedName}</p>
+  <p><strong>メモ：</strong>${data.memo || ""}</p>
+  <p><strong>緯度：</strong>${data.latitude || "未取得"}</p>
+  <p><strong>経度：</strong>${data.longitude || "未取得"}</p>
+  <button class="deleteBtn">削除する</button>
+`;
+
+const deleteBtn = div.querySelector(".deleteBtn");
+
+deleteBtn.addEventListener("click", async () => {
+  const result = confirm("この記録を削除しますか？");
+
+  if (!result) {
+    return;
+  }
+
+  await deleteDoc(doc(db, "weedRecords", doc.id));
+
+  alert("削除しました");
+
+  loadRecords();
+});
 
         recordsDiv.appendChild(div);
 
